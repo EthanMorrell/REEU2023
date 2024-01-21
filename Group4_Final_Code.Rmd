@@ -1,0 +1,330 @@
+---
+title: "REEU_GROUP4"
+author: "Ethan Morrell and Jaden Yamagata-Santos"
+date: "2023-07-18"
+output: html_document
+---
+
+
+<!--
+Summary of sections:
+
+1. Loading libraries 2. Loading data spreadsheets
+3. PCA (Shoot and Root)
+4. PCoA (Shoot)
+5. PCoA (Root)
+6. Country Map Generation
+-->
+
+
+```{r}
+#Load libraries
+
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+library(tidyverse)
+library(GGally)
+library(ggalt)
+library(gganimate)
+library(gapminder)
+library(gifski)
+library(scales)
+library(factoextra)
+library(ggforce)
+library(cluster)
+library(ggfortify)
+library(smartsnp)
+library(maps)
+library(ggpubr)
+
+```
+
+```{r}
+#Load spreadsheets
+
+# Update path to match the spreadsheets in this folder
+wdpath = 'CHANGE_ME'
+
+leafpath = paste(wdpath, "G4_Final_Leaf_Measurements.csv", sep = "", collapse = NULL)
+rootpath = paste(wdpath, "G4_Final_Root_Measurements.csv", sep = "", collapse = NULL)
+Leaf_Measurements<-read.csv(leafpath)
+Root_Measurements<-read.csv(rootpath)
+
+
+```
+
+```{r}
+#PCA For Shoot and Root Data
+
+
+# Setup
+#devtools::install_github("hrbrmstr/ggalt")
+library(missMDA)
+library(cowplot)
+library(patchwork)
+
+
+
+#-----------Begin Leaf Data PC-ifying----------
+
+#Select data columns to examine
+LMPC<-Leaf_Measurements[,7:10]
+
+
+#Clean data and impute missing values
+LMPC$Blade_Length<-as.numeric(LMPC$Blade_Length)
+LMPC$Blade_Width<-as.numeric(LMPC$Blade_Width)
+LMPC$Sheath_Length<-as.numeric(LMPC$Sheath_Length)
+LMPC$Surface_Area<-as.numeric(LMPC$Surface_Area)
+
+impLeaf <- imputePCA(LMPC, ncp = 3)
+
+complete_leaf <- impLeaf$completeObs
+pca_mod1 <- prcomp(complete_leaf, scale = T) 
+
+pca_mod_leaf <- data.frame(pca_mod1$x)
+
+
+#Add in region and genotype data
+pca_mod_leaf$Region<-Leaf_Measurements$Origin_Grouped_by_Region
+pca_mod_leaf$Genotype<-Leaf_Measurements$Genotype_ID
+
+#------------End Leaf Data PC-ifying-----------
+
+
+
+#-----------Begin Root Data PC-ifying----------
+
+#Select data columns to examine
+RMPC<-Root_Measurements[,c(10,11,19)]
+
+
+#Clean data and impute missing values
+LMPC$Blade_Length<-as.numeric(LMPC$Blade_Length)
+LMPC$Blade_Width<-as.numeric(LMPC$Blade_Width)
+LMPC$Sheath_Length<-as.numeric(LMPC$Sheath_Length)
+LMPC$Surface_Area<-as.numeric(LMPC$Surface_Area)
+
+impRoot <- imputePCA(RMPC, ncp = 2)
+
+complete_root <- impRoot$completeObs
+pca_mod2 <- prcomp(complete_root, scale = T) 
+
+pca_mod_root <- data.frame(pca_mod2$x)
+
+
+#Add in region and genotype data
+pca_mod_root$Region<-Root_Measurements$Origin_Grouped_By_Region
+pca_mod_root$Genotype<-Root_Measurements$Genotype_ID
+
+#-----------End Leaf Data PC-ifying----------
+
+
+
+# Define PCA grapher function:
+
+pca_me <- function(comp1, comp2, dataArg, typeArg) {
+  pc_graph <- ggplot(data = dataArg, aes_string(x = comp1, y = comp2, color = 'Region')) +
+    geom_point(size = 0.1) +
+    scale_color_manual(values = c('orange', 'yellow', 'red', 'purple', 'cyan')) +
+    scale_shape_manual(values = c(0,1,2,5,6)) +
+    coord_cartesian(
+      xlim = 1.2 * c(min(dataArg[comp1]), max(dataArg[comp1])),
+      ylim = 1.2 * c(min(dataArg[comp2]), max(dataArg[comp2]))
+    ) +
+    stat_ellipse(geom = 'polygon', alpha = 0.1, size = 0.5, aes(fill = 'Region')) +
+    guides(fill = FALSE, color = FALSE, shape = FALSE) +
+    coord_fixed()
+  return(pc_graph)
+}
+
+
+
+# Generate graphs:
+pcl1 <- pca_me('PC1','PC2',pca_mod_leaf,'Leaf')
+pcl2 <- pca_me('PC1','PC3',pca_mod_leaf,'Leaf')
+pcl3 <- pca_me('PC2','PC3',pca_mod_leaf,'Leaf')
+
+pcr1 <- pca_me('PC1','PC2',pca_mod_root,'Root')
+pcr2 <- pca_me('PC1','PC3',pca_mod_root,'Root')
+pcr3 <- pca_me('PC2','PC3',pca_mod_root,'Root')
+
+
+
+#Arrange graphs
+combined_plot_leaf <- pcl1 + pcl2 + pcl3 + plot_layout(nrow=1) +
+  plot_annotation(title = "PCA of Leaf Measurements", theme = theme(plot.title = element_text(hjust = 0.5))) + theme(legend.position = 'none')
+
+
+combined_plot_root <- pcr1 + pcr2 + pcr3 + plot_layout(nrow=1) +
+  plot_annotation(title = "PCA of Root Measurements", theme = theme(plot.title = element_text(hjust = 0.5))) + theme(legend.position = 'none')
+
+mega_dega_plot <- ggarrange(combined_plot_leaf,combined_plot_root, nrow = 2, ncol = 1)
+
+
+
+# Run graphs
+combined_plot_leaf
+combined_plot_root
+mega_dega_plot
+
+
+
+# ggsave("Leaf_PCAs.png", plot = combined_plot_leaf, dpi = 1200)
+# ggsave("Root_PCAs.png", plot = combined_plot_root, dpi = 1200)
+# ggsave("PCA_Ploop_Revised.png", plot = mega_dega_plot, dpi = 2000)
+
+
+```
+
+```{r}
+#PCoA for Shoot Data
+
+require(vegan)
+
+
+#Clean the data
+Leaf_Measurements$Blade_Length<-as.numeric(Leaf_Measurements$Blade_Length)
+Leaf_Measurements$Blade_Width<-as.numeric(Leaf_Measurements$Blade_Width)
+Leaf_Measurements$Sheath_Length<-as.numeric(Leaf_Measurements$Sheath_Length)
+Leaf_Measurements$Surface_Area<-as.numeric(Leaf_Measurements$Surface_Area)
+Leaf_Measurements <- na.omit(Leaf_Measurements)
+  
+leaf_c <- scale(Leaf_Measurements[ ,c(7:10)])
+pca <- rda(leaf_c)
+
+
+
+#Generate plots
+
+cols <- c('orange', 'yellow', 'red', 'purple','cyan')
+
+plot(pca, type = 'n', display = 'sites')
+points(pca, display='sites', col = cols, pch = 16)
+ordihull(pca, groups=Leaf_Measurements$Origin_Grouped_by_Region)
+ordispider(pca, groups = Leaf_Measurements$Origin_Grouped_by_Region, label = TRUE)
+
+
+# PerMANOVA - partitioning the euclidean distance matrix by species
+permanova <- adonis2(leaf_c ~ Leaf_Measurements$Origin_Grouped_by_Region, data = Leaf_Measurements, method='eu')
+leaf_dist <- vegdist(leaf_c, method="euclidean", binary=FALSE, diag=FALSE, upper=FALSE, na.rm=FALSE) 
+ldispersion <- betadisper(leaf_dist, Leaf_Measurements$Origin_Grouped_by_Region)
+anova(ldispersion)
+boxplot(ldispersion)
+plot(TukeyHSD(ldispersion))
+
+
+# Uncomment the following lines to save output to working directory
+
+# png("C:/Users/ethan/Downloads/Better_Brain_Bigger_Best2/Leaf_Displot_Final2.1.png", width = 9600, height = 6900, res = 1200)
+plot(ldispersion, col = cols, label=FALSE, segments = FALSE, pch=c(20,20,20,20,20), sub="", main="PCoA of Leaf Data", cex=0.2, xlim = c(-3,6), ylim = c(-4,2), ellipse = TRUE, hull= FALSE, lwd=2, axes=c(1,2), cex.lab = 1.7, cex.main = 1.8, cex.axis = 1.7)
+# dev.off()
+
+
+
+```
+
+
+```{r}
+
+
+# Root PCoA
+
+require(vegan)
+
+
+#Clean the data
+
+Root_Measurements$Number.of.Root.Tips<-as.numeric(Root_Measurements$Number.of.Root.Tips)
+Root_Measurements$Number.of.Branch.Points<-as.numeric(Root_Measurements$Number.of.Branch.Points)
+Root_Measurements$Total.Root.Length.mm<-as.numeric(Root_Measurements$Total.Root.Length.mm)
+Root_Measurements$Surface.Area.mm2<-as.numeric(Root_Measurements$Surface.Area.mm2)
+Root_Measurements <- na.omit(Root_Measurements)
+  
+Root_c <- scale(Root_Measurements[ ,c(10:12,20)])
+pca <- rda(Root_c)
+
+
+
+#Generate plots
+
+cols <- c('orange', 'yellow', 'red', 'purple','cyan')
+
+plot(pca, type = 'n', display = 'sites')
+points(pca, display='sites', col = cols, pch = 16)
+ordihull(pca, groups=Root_Measurements$Origin_Grouped_By_Region)
+ordispider(pca, groups = Root_Measurements$Origin_Grouped_By_Region, label = TRUE)
+
+# PerMANOVA - partitioning the euclidean distance matrix by species
+permanova<-adonis2(Root_c ~ Origin_Grouped_By_Region, data = Root_Measurements, method='eu')
+Root_dist<-vegdist(Root_c, method="euclidean", binary=FALSE, diag=FALSE, upper=FALSE,
+        na.rm = FALSE) 
+rdispersion<-betadisper(Root_dist, Root_Measurements$Origin_Grouped_By_Region)
+anova(rdispersion)
+permutest(rdispersion, pairwise=TRUE)
+boxplot(rdispersion)
+plot(TukeyHSD(rdispersion))
+
+
+# Uncomment the following lines to save output to working directory
+
+# png("C:/Users/ethan/Downloads/Better_Brain_Bigger_Best2/Root_Displot_Final2.png", width = 9600, height = 6900, res = 1200)
+plot(rdispersion, col = cols, label=FALSE, segments = FALSE, pch=c(20,20,20,20,20), sub="", main="PCoA of Root Data", cex=0.2, xlim = c(-9,3), ylim = c(-4,4), ellipse = TRUE, hull= FALSE, lwd=2, axes=c(1,2), cex.lab = 1.7, cex.main = 1.8, cex.axis = 1.7)
+# dev.off()
+
+
+```
+
+
+```{r}
+# Generate colored maps of each region
+
+
+#Define map-making function
+make_map <- function(countryArg, colorArg) {
+  country_df <- fortify(map('world', regions = countryArg, plot = FALSE, fill = TRUE))
+  mapPlot <- ggplot(country_df, aes(x = long, y = lat, group = group)) +
+    geom_polygon(fill = colorArg, color = "black") +
+    coord_fixed() +
+    theme_minimal() +
+    theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank())
+  
+  return(mapPlot)
+}
+
+
+#Generate maps
+thailandMap <- make_map('Thailand', 'red')
+mexicoMap <- make_map('Mexico', 'orange')
+saMap <- make_map('South Africa', 'yellow')
+zimbabweMap <- make_map('Zimbabwe', 'blue')
+
+
+#USA needs its own map because it doesn't pull from world
+usa_df <- fortify(map("usa", plot = FALSE, fill = TRUE))
+usaMap <- ggplot(usa_df, aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill = "purple", color = "black") +
+  coord_fixed() +
+  theme_minimal() +
+  theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank())
+  
+
+#Display maps
+thailandMap
+mexicoMap
+saMap
+zimbabweMap
+usaMap
+
+
+# ggsave("thailand_map.png", plot = thailandMap, dpi = 1200)
+# ggsave("mexico_map.png", plot = mexicoMap, dpi = 1200)
+# ggsave("south_africa_map.png", plot = saMap, dpi = 1200)
+# ggsave("zimbabwe_map.png", plot = zimbabweMap, dpi = 1200)
+# ggsave("usa_map.png", plot = usaMap, dpi = 1200)
+
+
+```
+
